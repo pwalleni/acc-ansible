@@ -1,0 +1,9 @@
+
+---
+- name: Linux Agent - Single Line Uninstallation
+  hosts: linux #host listed in /etc/ansible/hosts
+  become: true #ensure highest permission are used on the remote host
+
+  tasks:
+  - name : Uninstall Agent Client Collector
+    ansible.builtin.shell: bash -c "$(curl -L {{ instanceToConnect  }}/api/sn_agent/agents/install_agent)" -s "--remove" >> /tmp/ansibleSinglelineUninstall.log 2>&1

@@ -1,0 +1,17 @@
+
+---
+- name: Linux Agent - Single Line Installation
+  hosts: linux #host listed in /etc/ansible/hosts
+  become: true #ensure highest permission are used on the remote host
+
+  vars_files:
+    - group_vars/all
+
+  tasks:
+    - name: Install Agent Client Collector
+      ansible.builtin.shell: >
+        ACC_VALIDATE_SIG={{ signatureValidation }}
+        ACC_ALLOW_LIST={{ enableAllowList }}
+        ACC_API_KEY={{ apiKey }}
+        ACC_MID=wss://{{ webserverIP }}:{{ webserverPort }}/ws/events
+        bash -c "$(curl -L {{ instanceToConnect }}/api/sn_agent/agents/install_agent)" >> /tmp/ansibleSinglelineinstall.log 2>&1

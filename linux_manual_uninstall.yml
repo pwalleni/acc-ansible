@@ -1,0 +1,41 @@
+
+---
+- name: Linux Agent - Manual Uninstallation
+  hosts : linux #host listed in /etc/ansible/hosts
+  become: true #ensure highest permission are used on the remote host
+
+  vars_files:
+    - group_vars/all
+
+  vars: #check inventory file @ /etc/ansible/hosts file for host-specific vars
+    agentName : agent-client-collector
+    agentServiceName : acc
+
+  tasks :
+    - name : Disable - Agent Client Collector service
+      ansible.builtin.shell : systemctl disable {{ agentServiceName }}
+      ignore_errors: true
+
+    - name : Stop - Agent Client Collector service
+      ansible.builtin.shell : systemctl stop {{ agentServiceName }}
+      ignore_errors: true
+
+    - name : Ubuntu - Check if Agent Client Collector package is installed
+      shell : dpkg -s {{ agentName }}
+      register: ubuntuPkgInstalledCheck
+      failed_when: ubuntuPkgInstalledCheck.stdout|length <= 0
+      when : ansible_os_family == 'Ubuntu'
+
+    - name : Check if Agent Client Collector package is installed
+      shell : rpm -qa {{ agentName }}
+      register: pkgInstalledCheck
+      failed_when: pkgInstalledCheck.stdout|length <= 0
+      when : (ansible_os_family == 'RedHat' or ansible_os_family == 'CentOS' or ansible_os_family == "Suse" ) and ansible_os_family != 'Debian'
+
+    - name : Uninstall Agent Client Collector Ubuntu/Debian
+      shell: dpkg -r {{ agentName }}
+      when : ansible_os_family == 'Ubuntu' or ansible_os_family == 'Debian'
+
+    - name : Uninstall Agent Client Collector
+      shell: rpm -e  {{ agentName }}
+      when : ansible_os_family == 'RedHat' or ansible_os_family == 'CentOS' or ansible_os_family == "Suse"

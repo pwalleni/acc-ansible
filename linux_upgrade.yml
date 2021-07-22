@@ -1,0 +1,15 @@
+
+---
+- name: Linux Agent - Upgrade
+  hosts: linux #host listed in /etc/ansible/hosts
+  become: true #ensure highest permission are used on the remote host
+
+  vars_files:
+    - group_vars/all
+
+  tasks:
+
+    - name: Upgrade Agent Client Collector (Linux)
+      ansible.builtin.shell: >
+        ACC_FORCE=no
+        bash -c "$(curl -L {{ instanceToConnect }}/api/sn_agent/agents/install_agent)" >> /tmp/ansibleUpgrade.log 2>&1

@@ -1,0 +1,13 @@
+# Common variables for agent installation that should be configured
+
+version: 2.4.0
+webserverIP: 10.11.145.209
+webserverPort: 9900
+instanceToConnect: http://10.15.154.35:8080
+apiKey: b3c0382f533220103f5fddeeff7b12dd
+linuxDownloadFolder: /tmp/agentInstallerPackage
+signatureValidation: 1
+enableAllowList: 1
+
+# Common variables that should not be configured
+installServerBaseUrl: https://install.service-now.com/glide/distribution/builds/package

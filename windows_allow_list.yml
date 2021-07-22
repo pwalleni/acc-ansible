@@ -1,0 +1,37 @@
+
+---
+- name: Windows Agent - Enable/Disable Allow List
+  hosts: windows #host listed in /etc/ansible/hosts
+
+  vars_files:
+    - group_vars/all
+
+  vars:
+    agentConfigLoc: 'C:\ProgramData\ServiceNow\agent-client-collector\config\acc.yml'
+    allowListLoc: 'C:\ProgramData\ServiceNow\agent-client-collector\config\check-allow-list.json'
+    enableAllowList: 1
+
+  tasks:
+    - name: Stop Agent Client Collector service
+      ansible.windows.win_service:
+        name: AgentClientCollector
+        state: stopped
+
+    - name: Edit acc.yml to enable allow list
+      win_lineinfile:
+        path: '{{ agentConfigLoc }}'
+        regex: 'allow-list:'
+        line: 'allow-list: {{ allowListLoc }}'
+      when: enableAllowList | int == 1
+
+    - name: Edit acc.yml to disable allow list
+      win_lineinfile:
+        path: '{{ agentConfigLoc }}'
+        regex: 'allow-list:'
+        line: '#allow-list: {{ allowListLoc }}'
+      when: enableAllowList | int == 0
+
+    - name: Start Agent Client Collector service
+      ansible.windows.win_service:
+        name: AgentClientCollector
+        state: started

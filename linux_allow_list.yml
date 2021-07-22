@@ -1,0 +1,44 @@
+
+---
+- name: Linux Agent - Enable/Disable Allow List
+  hosts: linux #host listed in /etc/ansible/hosts
+  become: true #ensure highest permission are used on the remote host
+
+  vars_files:
+    - group_vars/all
+
+  vars: #check inventory file @ /etc/ansible/hosts file for host-specific vars
+    #Agent Installation constants
+    agentInstallLoc: /etc/servicenow/agent-client-collector
+    agentServiceName: acc
+    agentConfigFileName: acc.yml
+    agentAllowListFileName: check-allow-list.json
+
+  tasks:
+    - name: Disable - Agent Client Collector service
+      ansible.builtin.shell : systemctl disable {{ agentServiceName }}
+      ignore_errors: true
+
+    - name: Stop - Agent Client Collector service
+      ansible.builtin.shell : systemctl stop {{ agentServiceName }}
+      ignore_errors: true
+
+    - name: Disable Allow-List
+      ansible.builtin.replace:
+        path: '{{ agentInstallLoc }}/{{ agentConfigFileName }}'
+        regexp: 'allow-list: '
+        replace: '#allow-list: '
+      when: enableAllowList | int == 0
+
+    - name: Enable Allow-List
+      ansible.builtin.replace:
+        path: '{{ agentInstallLoc }}/{{ agentConfigFileName }}'
+        regexp: '#allow-list: '
+        replace: 'allow-list: '
+      when: enableAllowList | int == 1
+
+    - name: Enable - Agent Client Collector service
+      ansible.builtin.shell: systemctl enable {{ agentServiceName }}
+
+    - name: Start - Agent Client Collector service
+      ansible.builtin.shell: systemctl start {{ agentServiceName }}

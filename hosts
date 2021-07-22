@@ -1,0 +1,97 @@
+########################## CentOS  ##########################
+
+[CentOS]
+10.10.0.1
+
+[CentOS:vars]
+release=el7
+arch=x86_64
+extension=rpm
+
+########################## Debian #######################
+
+[Debian_8]
+10.11.0.1
+
+[Debian_8:vars]
+release=debian-8
+
+[Debian_9]
+10.11.0.2
+
+[Debian_9:vars]
+release=debian-9
+
+[Debian:children]
+Debian_8
+Debian_9
+
+[Debian:vars]
+arch=amd64
+extension=deb
+
+########################## Ubuntu ##########################
+
+[Ubuntu_16]
+10.12.0.1
+
+[Ubuntu_16:vars]
+release=ubuntu-1604
+
+[Ubuntu_18]
+10.12.0.2
+
+[Ubuntu_18:vars]
+release=ubuntu-1804
+
+[Ubuntu:children]
+Ubuntu_16
+Ubuntu_18
+
+[Ubuntu:vars]
+arch=amd64
+extension=deb
+
+
+########################## SUSE ##########################
+
+[SUSE]
+10.13.0.1
+
+[SUSE:vars]
+release=el7
+arch=x86_64
+extension=rpm
+
+########################## RedHat ##########################
+
+[RedHat]
+10.14.0.1
+
+[RedHat:vars]
+release=el7
+arch=x86_64
+extension=rpm
+
+########################## Linux Group ##########################
+
+[linux:children]
+Ubuntu
+Debian
+CentOS
+SUSE
+RedHat
+
+########################## Windows ##########################
+
+[Win_2016]
+11.10.0.1
+
+[Win_2019]
+11.10.0.2
+
+########################## Windows Group ##########################
+
+[windows:children]
+Win_2016
+Win_2019

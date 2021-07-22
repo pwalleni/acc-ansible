@@ -1,0 +1,178 @@
+
+---
+- name: Linux Agent - Manual Installation
+  hosts: linux #host listed in /etc/ansible/hosts
+  become: true #ensure highest permission are used on the remote host
+
+  vars_files:
+    - group_vars/all
+
+  vars: #check inventory file @ /etc/ansible/hosts file for host-specific vars
+    extensionSeparator: "{{ '_' if  ansible_os_family == 'Debian' else '-' }}"
+    installerExtension: '{{ release }}{{ extensionSeparator }}{{ arch }}.{{ extension }}'
+    signedZipExtension: '{{ release }}{{ extensionSeparator }}{{ arch }}-{{ extension }}-{{ extension }}.zip'
+    accInstallerName: 'agent-client-collector-{{ version }}-{{ installerExtension }}'
+    signatureFile: 'agent-client-collector-{{ version }}-{{ release }}-{{ arch }}.bin'
+    installServerLoc: "{{ 'app-signed' if signatureValidation == 1 else 'agent-client-collector' }}"
+    installServer: '{{ installServerBaseUrl  }}/{{ installServerLoc  }}'
+
+    #Agent Installation constants
+    agentInstallLoc: /etc/servicenow/agent-client-collector
+    agentServiceName: acc
+    agentConfigFileName: acc.yml
+    agentAllowListFileName: check-allow-list.json
+
+  tasks:
+    ###
+    # This play will delete the download folder defined in hosts file [delete will include the directory]
+    ###
+    - name: Remove installer folder and its contents if already exists [{{ linuxDownloadFolder }}]
+      file:
+        path: '{{ linuxDownloadFolder }}'
+        state: absent
+
+    ###
+    # This play will create the download folder defined in hosts file
+    ###
+    - name: Create download folder [{{ linuxDownloadFolder }}]
+      ansible.builtin.file:
+        path: '{{ linuxDownloadFolder }}'
+        state: directory
+        mode: '0755'
+
+    ###
+    # This play will download installer packages
+    ###
+    - name: Download Agent Client Collector
+      get_url:
+        url: '{{ installServer }}/{{ accInstallerName }}'
+        dest: '{{ linuxDownloadFolder }}/{{ accInstallerName }}'
+
+    ###
+    # This play will make verify unzip is installed
+    ###
+    - name: Check if Unzip is installed
+      shell: command -v unzip
+      register: unZiPInstallCheck
+      failed_when: unZiPInstallCheck.stdout|length <= 0
+      when: signatureValidation == 1
+
+    ###
+    # This play will download signature file
+    ###
+    - name: Download signed Agent Client Collector package
+      get_url:
+        url: '{{ installServer }}/agent-client-collector-{{ version }}-{{ signedZipExtension }}'
+        dest: '{{ linuxDownloadFolder }}/agent-client-collector-{{ version }}-{{ signedZipExtension }}'
+      when: signatureValidation == 1
+
+    ###
+    # This play will unzip the installer
+    ###
+    - name: Unzip downloaded installer
+      unarchive:
+        src: '{{ linuxDownloadFolder }}/agent-client-collector-{{ version }}-{{ signedZipExtension }}'
+        dest: '{{ linuxDownloadFolder }}'
+        remote_src: yes
+      when: signatureValidation == 1
+
+    ###
+    # These plays will import and validate the signature depending on target OS
+    ###
+    - name: Validate Signature of Installer - import ServiceNow DigiCert Public key [Ubuntu/Debian]
+      shell: gpg --import '{{ linuxDownloadFolder }}/ServiceNow_Digicert_Public.gpg'
+      register: gpg_out
+      failed_when: >
+        ("Total number processed: 1" not in gpg_out.stdout) and
+        (("unchanged: 1" in gpg_out.stdout) or ("imported: 1" in gpg_out.stdout))
+      when: signatureValidation == 1 and ( ansible_os_family == 'Ubuntu' or ansible_os_family == 'Debian' )
+
+    - name: Validate Signature of Installer- verify ServiceNow DigiCert Public key [Ubuntu/Debian]
+      shell: dpkg-sig --verify '{{ linuxDownloadFolder }}/{{ accInstallerName }}'
+      register: signature_check
+      failed_when: "'GOODSIG' not in signature_check.stdout"
+      when: signatureValidation == 1 and ( ansible_os_family == 'Ubuntu' or ansible_os_family == 'Debian' )
+
+    - name: Validate Signature of Installer- import and verify ServiceNow DigiCert Public key [RedHat/CentOS/SUSE]
+      shell: openssl dgst -sha256 -verify {{ linuxDownloadFolder }}/ServiceNow_Digicert_DGST.pem -signature {{ linuxDownloadFolder }}/{{ signatureFile }} {{ linuxDownloadFolder }}/{{ accInstallerName }}
+      register: signature_check_dgst
+      failed_when: "'Verified OK' not in signature_check_dgst.stdout"
+      when: signatureValidation == 1 and ( ansible_os_family == 'RedHat' or ansible_os_family == 'CentOS' or ansible_os_family == "Suse" )
+
+    ######################################################################
+
+    ###
+    # These plays will install the agent package depending on target OS
+    ###
+    - name: Install Agent Client Collector package [Ubuntu/Debian]
+      shell: dpkg -i '{{ linuxDownloadFolder }}/{{ accInstallerName }}'
+      when: ansible_os_family == 'Ubuntu' or ansible_os_family == 'Debian'
+
+    - name: Install Agent Client Collector package [RedHat/CentOS/SUSE]
+      shell:
+        cmd: rpm -vi  --force '{{ linuxDownloadFolder }}/{{ accInstallerName }}'
+      when: ansible_os_family == 'RedHat' or ansible_os_family == 'CentOS' or ansible_os_family == "Suse"
+
+    ######################################################################
+
+    ###
+    # These plays will handle configuration of the acc.yml file
+    ###
+    - name: Copy yml File
+      ansible.builtin.shell: cp -p {{ agentInstallLoc }}/acc.yml.example {{ agentInstallLoc }}/{{ agentConfigFileName }}
+
+    - name: Update webserver IP Address and port
+      ansible.builtin.replace:
+        path: '{{ agentInstallLoc }}/{{ agentConfigFileName }}'
+        regexp: 'wss://127.0.0.1:8800/ws/events'
+        replace: 'wss://{{ webserverIP }}:{{ webserverPort }}/ws/events'
+
+    - name: Update MID API Key
+      ansible.builtin.replace :
+        path: '{{ agentInstallLoc }}/{{ agentConfigFileName }}'
+        regexp: 'api-key: ""'
+        replace: 'api-key: "{{ apiKey }}"'
+
+    # - name : Turn off verify signature
+    #   ansible.builtin.replace :
+    #     path : '{{ agentInstallLoc }}/{{ agentConfigFileName }}'
+    #     regexp : '#verify-plugin-signature: true'
+    #     replace : 'verify-plugin-signature: false'
+
+    - name: Disable Allow-List
+      ansible.builtin.replace:
+        path: '{{ agentInstallLoc }}/{{ agentConfigFileName }}'
+        regexp: 'allow-list: '
+        replace: '#allow-list: '
+      when: enableAllowList == 0
+
+    - name: Copy Allow-List File
+      ansible.builtin.shell: cp -p {{ agentInstallLoc }}/check-allow-list.json.default {{ agentInstallLoc }}/{{ agentAllowListFileName }}
+
+    ###
+    # This play will allow servicenow user access to acc file
+    ###
+    - name: Change Agent Client Collector config file permission
+      file:
+        path: '{{ agentInstallLoc }}/{{ agentConfigFileName }}'
+        owner: servicenow
+        group: servicenow
+
+    ###
+    # These plays handle enabling and starting ACC service
+    ###
+    - name: Enable - Agent Client Collector service
+      ansible.builtin.shell: systemctl enable {{ agentServiceName }}
+
+    - name: Start - Agent Client Collector service
+      ansible.builtin.shell: systemctl start {{ agentServiceName }}
+
+    ######################################################################
+
+    ###
+    # This play will ensure download folder for installer is cleaned up
+    ###
+    - name: Cleanup - Remove installer folder and its contents '{{ linuxDownloadFolder }}'
+      file:
+        path: '{{ linuxDownloadFolder }}'
+        state: absent

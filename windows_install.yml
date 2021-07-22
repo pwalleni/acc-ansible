@@ -1,0 +1,50 @@
+
+---
+- name: Windows Agent - Installation
+  hosts: windows #host listed in /etc/ansible/hosts
+
+  vars_files:
+    - group_vars/all
+
+  vars:
+    logFilePath: 'C:\temp\ansibleAgentInstall.log'
+    agentConfigLoc: 'C:\ProgramData\ServiceNow\agent-client-collector\config\acc.yml'
+    installServerLoc: "{{ 'app-signed' if signatureValidation == 1 else 'agent-client-collector' }}"
+    installServer: '{{ installServerBaseUrl  }}/{{ installServerLoc  }}'
+
+  tasks:
+    - name: Setting allowList variable
+      set_fact: 
+        allowList: "{{ 'False' if (enableAllowList == 0) else 'True' }}"
+
+    - name: Download Agent Client Collector on {{ ansible_os_family }}
+      win_get_url :
+        url: '{{ installServer }}/agent-client-collector-{{ version }}-windows-x64.msi'
+        dest: '{{ ansible_env.USERPROFILE }}\Downloads\agent-client-collector-{{ version }}-windows-x64.msi'
+
+    - name: Install Agent Client Collector on {{ ansible_os_family }}
+      win_package: 
+        path: '{{ ansible_env.USERPROFILE }}\Downloads\agent-client-collector-{{ version }}-windows-x64.msi'
+        arguments: '/quiet /L*v "{{ logFilePath }}" ACC_API_KEY="{{ apiKey }}" ACC_MID="wss://{{ webserverIP }}:{{ webserverPort }}/ws/events" ACC_ALLOW_LIST={{ allowList | capitalize }}'
+        state: present
+
+    - name: Cleanup agent download
+      ansible.windows.win_file:
+        path: '{{ ansible_env.USERPROFILE }}\Downloads\agent-client-collector-{{ version }}-windows-x64.msi'
+        state: absent
+
+    - name: Stop Agent Client Collector service
+      ansible.windows.win_service:
+        name: AgentClientCollector
+        state: stopped
+
+    - name: Edit acc.yml to turn off plugin verification
+      win_lineinfile:
+        path: '{{ agentConfigLoc }}'
+        regexp: 'verify-plugin-signature'
+        line: 'verify-plugin-signature: false'
+
+    - name: Start Agent Client Collector service
+      ansible.windows.win_service:
+        name: AgentClientCollector
+        state: started
